@@ -4,17 +4,61 @@ let chaiHTTP = require('chai-http');
 chai.use(chaiHTTP);
 let request = chai.request;
 let expect = chai.expect;
-var mongoose = require('mongoose');
-var Animal = require(__dirname + './../models/animals_model');
+let mongoose = require('mongoose');
+let bcrypt = require('bcrypt');
+let jwt = require('jsonwebtoken');
+let User = require(__dirname + '/../models/user_model');
+let Animal = require(__dirname + '/../models/animals_model');
 let People = require(__dirname + '/../models/people_model');
 require(__dirname + '/../server');
-var testId;
+let testId;
+let testToken;
+
+describe('tests creating new user', () => {
+  it('expect user to userName: bigboy, with status 200 and property password ', (done) => {
+    request('localhost:3000')
+      .post('/createUser')
+      .send('{"userName":"bigboy", "password":"123456"}')
+      .end((err, res) => {
+        expect(err).to.eql(null);
+        expect(res).to.be.json;
+        expect(res.body.status).to.eql(200);
+        expect(res.body.data).to.have.a.property('password');
+        expect(res.body.data['userName']).to.eql('bigboy');
+        done();
+      })
+  })
+})
+
+describe('tests creating a hashed password and a token', () => {
+  it('expect user to have status 200 with a property token on valid login', (done) => {
+    request('localhost:3000')
+      .post('/login')
+      .auth('bigboy', '123456')
+      .end((err, res) => {
+        testToken = res.body.token;
+        expect(err).to.eql(null);
+        expect(res).to.be.json;
+        expect(res.status).to.eql(200);
+        expect(res.body).to.have.a.property('token');
+        done();
+      })
+  })
+
+  after((done) => {
+    mongoose.connection.db.dropDatabase(() => {
+      done();
+    })
+  })
+})
+
 
 describe('Test /animals route', () => {
   it('expect res on POST, to be equal to dumbo, peanuts, 50, with status 200 ', (done) => {
     request('localhost:3000')
-      .post('/animals')
+      .post('/api/animals')
       .send('{"name":"dumbo","favoriteFood":"peanuts","age":50}')
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         testId = res.body.data['_id'];
         expect(err).to.eql(null);
@@ -30,7 +74,8 @@ describe('Test /animals route', () => {
 
   it('expect GET to have status 200, with content-type json', (done) => {
     request('localhost:3000')
-      .get('/animals')
+      .get('/api/animals')
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res).to.be.json
@@ -66,7 +111,8 @@ describe('Testing /animals/\':id\' specific route', () => {
 
   it('expect response, to specific ID (with name: ducky, favoriteFood: candy, age: 2)', (done) => {
     request('localhost:3000')
-      .get('/animals/' + testId)
+      .get('/api/animals/' + testId)
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.body.status).to.eql(200);
@@ -81,8 +127,9 @@ describe('Testing /animals/\':id\' specific route', () => {
 
   it('expect PUT,to override previous ID with the name: duck, favoriteFood: bread, age: 500, and with status 200', (done) => {
     request('localhost:3000')
-      .put('/animals/' + testId)
+      .put('/api/animals/' + testId)
       .send('{"name":"duck","favoriteFood":"bread","age":500}')
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.body.status).to.eql(200);
@@ -96,7 +143,8 @@ describe('Testing /animals/\':id\' specific route', () => {
 
   it('expect DELETE to have status 200, with a message \'animal removed\'', (done) => {
     request('localhost:3000')
-      .delete('/animals/' + testId)
+      .delete('/api/animals/' + testId)
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.status).to.eql(200);
@@ -120,7 +168,8 @@ describe('Testing /animals/\':id\' specific route', () => {
 
   it('expect non-crud route to find most popular food fish, with a count of 2.', (done) => {
     request('localhost:3000')
-      .get('/mostPopularAnimalFood')
+      .get('/api/mostPopularAnimalFood')
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.status).to.eql(200);
@@ -134,7 +183,8 @@ describe('Testing /animals/\':id\' specific route', () => {
 describe('Test /people route', () => {
   it('expect POST to equal name: jason, favoriteFood: beer, and age: 13, with a status code 200', (done) => {
     request('localhost:3000')
-    .post('/people')
+    .post('/api/people')
+    .set('Authorization', 'token ' + testToken)
     .send('{"name":"jason","favoriteFood":"beer","age":10}')
     .end((err, res) => {
       expect(err).to.eql(null);
@@ -149,7 +199,8 @@ describe('Test /people route', () => {
 
   it('expect GET to status 200, with content-type json', (done) => {
     request('localhost:3000')
-    .get('/people')
+    .get('/api/people')
+    .set('Authorization', 'token ' + testToken)
     .end((err, res) => {
       expect(err).to.eql(null);
       expect(res.body.status).to.be.eql(200);
@@ -185,7 +236,8 @@ describe('Testing /people/\':id\' at a specifc route', () => {
 
   it('expect GET response to equal, name: monGruse, favoriteFood: pizza, age: 27', (done) => {
     request('localhost:3000')
-      .get('/people/' + testId)
+      .get('/api/people/' + testId)
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.body.status).to.eql(200);
@@ -200,7 +252,8 @@ describe('Testing /people/\':id\' at a specifc route', () => {
 
   it('expect PUT to override previous ID with the name: Mario, favoriteFood: awesomesauce, age: 40, and with status 200', (done) => {
     request('localhost:3000')
-      .put('/animals/' + testId)
+      .put('/api/animals/' + testId)
+      .set('Authorization', 'token ' + testToken)
       .send('{"name":"Mario","favoriteFood":"awesomesauce","age":40}')
       .end((err, res) => {
         expect(err).to.eql(null);
@@ -215,7 +268,8 @@ describe('Testing /people/\':id\' at a specifc route', () => {
 
   it('expect DELETE to have status 200 with message \'person removed\' ', (done) => {
     request('localhost:3000')
-      .delete('/people/' + testId)
+      .delete('/api/people/' + testId)
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.status).to.eql(200);
@@ -239,12 +293,54 @@ describe('Testing /people/\':id\' at a specifc route', () => {
 
   it('expect non-crud route to find most popular food pizza with a count of 3.', (done) => {
     request('localhost:3000')
-      .get('/mostPopularPeopleFood')
+      .get('/api/mostPopularPeopleFood')
+      .set('Authorization', 'token ' + testToken)
       .end((err, res) => {
         expect(err).to.eql(null);
         expect(res.status).to.eql(200);
         expect(res.body['message']).to.eql('The most popular food for people is, \'pizza\' with 3 tallies');
         done();
       })
+  })
+})
+
+describe('testing errors', () => {
+  before((done) => {
+    let newUser = new User({"userName":"bigboy", "password":"123456"});
+    newUser.save((err, user) => {
+      if(err) throw err;
+    })
+    done();
+  })
+
+  it('expect non unique username to fail', (done) => {
+    request('localhost:3000')
+      .post('/createUser')
+      .send('{"userName":"bigboy", "password":"123456"}')
+      .end((err, res) => {
+        expect(res).to.be.json;
+        expect(res.status).to.eql(404);
+        expect(res.body.message).to.eql('username is already taken');
+        done();
+      })
+  })
+
+  it('expect invalid login, with \'authentication error\' with status 400', (done) => {
+    request('localhost:3000')
+      .get('/api/people')
+      .set('Authorization', 'token 1' + testToken)
+      .end((err, res) => {
+        expect(res.error.status).to.eql(400);
+        expect(res).to.be.json;
+        expect(res.error.text).to.eql('{"message":"authentication error"}');
+        done();
+      })
+  })
+
+  after((done) => {
+    testToken = null
+    mongoose.connection.db.dropDatabase(() => {
+      done();
+    })
   })
 })

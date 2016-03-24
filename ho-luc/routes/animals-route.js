@@ -1,16 +1,8 @@
 'use strict'
 let Animal = require(__dirname + '/../models/animals_model');
+
 module.exports = (apiRouter) => {
   apiRouter.route('/animals')
-    .get((req, res) => {
-      Animal.find({}, (err, animal) => {
-        res.json({
-          status: 200,
-          data: animal
-        })
-        res.end()
-      })
-    })
     .post((req, res) => {
       req.on('data', (data) => {
         req.body = JSON.parse(data);
@@ -22,6 +14,15 @@ module.exports = (apiRouter) => {
           })
           res.end();
         })
+      })
+    })
+    .get((req, res) => {
+      Animal.find({}, (err, animal) => {
+        res.json({
+          status: 200,
+          data: animal
+        })
+        res.end()
       })
     })
 
